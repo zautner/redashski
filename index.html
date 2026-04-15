@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Redashski — Snapshot Redash queries locally</title>
+  <meta name="description" content="Chrome extension that snapshots Redash query outputs locally. Keep a per-tab queue of recent snapshots and compare table data and chart visuals in the side panel.">
+  <meta property="og:title" content="Redashski">
+  <meta property="og:description" content="Snapshot Redash queries locally. Compare table data and chart visuals in the side panel.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://zautner.github.io/redashski/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    /* ── Reset ──────────────────────────────────────────────────── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* ── Tokens ─────────────────────────────────────────────────── */
+    :root {
+      --bg-base:       #0c0d12;
+      --bg-surface:    #13151c;
+      --bg-elevated:   #1a1d27;
+      --bg-hover:      #212532;
+      --text-primary:  #eaecf3;
+      --text-secondary:#8e94ad;
+      --text-muted:    #505672;
+      --accent-from:   #7b68ee;
+      --accent-to:     #a78bfa;
+      --accent-subtle: rgba(123,104,238,0.12);
+      --accent-glow:   rgba(123,104,238,0.22);
+      --success:       #3ddba0;
+      --border-color:  rgba(255,255,255,0.06);
+      --font:          'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-mono:     'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    }
+
+    /* ── Base ───────────────────────────────────────────────────── */
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: var(--font);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    a { color: var(--accent-to); text-decoration: none; transition: color 0.18s; }
+    a:hover { color: #c4b5fd; }
+    code {
+      font-family: var(--font-mono);
+      font-size: 0.88em;
+      background: var(--bg-elevated);
+      padding: 2px 7px;
+      border-radius: 5px;
+      border: 1px solid var(--border-color);
+      color: var(--accent-to);
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────── */
+    .container { max-width: 800px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Ambient background glow ────────────────────────────────── */
+    .bg-glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      overflow: hidden;
+    }
+    .bg-glow::before {
+      content: '';
+      position: absolute;
+      width: 600px; height: 600px;
+      top: -200px; left: 50%;
+      transform: translateX(-50%);
+      background: radial-gradient(circle, rgba(123,104,238,0.08) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+    .bg-glow::after {
+      content: '';
+      position: absolute;
+      width: 500px; height: 500px;
+      bottom: -100px; right: -100px;
+      background: radial-gradient(circle, rgba(61,219,160,0.04) 0%, transparent 70%);
+      border-radius: 50%;
+    }
+
+    /* ── Header / Nav ──────────────────────────────────────────── */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(12,13,18,0.8);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-color);
+    }
+    .site-header .container {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+    }
+    .site-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+    }
+    .site-logo span {
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.4px;
+      background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav-links { display: flex; gap: 24px; align-items: center; }
+    .nav-links a {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      letter-spacing: -0.1px;
+      transition: color 0.18s;
+    }
+    .nav-links a:hover { color: var(--text-primary); }
+    .nav-badge {
+      display: inline-flex;
+      padding: 3px 10px;
+      background: var(--accent-subtle);
+      color: var(--accent-to);
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      border-radius: 20px;
+      border: 1px solid rgba(123,104,238,0.18);
+      letter-spacing: 0.4px;
+    }
+
+    /* ── Hero ───────────────────────────────────────────────────── */
+    .hero {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 80px 0 60px;
+    }
+    .hero-logo {
+      margin-bottom: 28px;
+      filter: drop-shadow(0 4px 20px rgba(123,104,238,0.35));
+    }
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 800;
+      letter-spacing: -1.5px;
+      line-height: 1.15;
+      margin-bottom: 18px;
+    }
+    .hero h1 .gradient {
+      background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: clamp(15px, 2vw, 17px);
+      color: var(--text-secondary);
+      max-width: 520px;
+      margin: 0 auto 32px;
+      line-height: 1.7;
+    }
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4,0,0.2,1);
+      text-decoration: none;
+      border: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-from), var(--accent-to));
+      color: #fff;
+      box-shadow: 0 2px 12px rgba(123,104,238,0.35), 0 0 0 1px rgba(123,104,238,0.1);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 28px rgba(123,104,238,0.4), 0 0 0 1px rgba(123,104,238,0.15);
+      color: #fff;
+    }
+    .btn-secondary {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-color);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      border-color: rgba(255,255,255,0.1);
+      transform: translateY(-2px);
+    }
+    .btn svg { flex-shrink: 0; }
+
+    /* ── Badges row ────────────────────────────────────────────── */
+    .badges {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 32px;
+    }
+    .badges img {
+      height: 22px;
+      border-radius: 4px;
+    }
+
+    /* ── Section ────────────────────────────────────────────────── */
+    section {
+      position: relative;
+      z-index: 1;
+      padding: 60px 0;
+    }
+    section + section { border-top: 1px solid var(--border-color); }
+    .section-label {
+      display: inline-flex;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1.2px;
+      color: var(--accent-to);
+      margin-bottom: 12px;
+      padding: 4px 12px;
+      background: var(--accent-subtle);
+      border-radius: 20px;
+      border: 1px solid rgba(123,104,238,0.15);
+    }
+    section h2 {
+      font-size: clamp(22px, 3.5vw, 30px);
+      font-weight: 700;
+      letter-spacing: -0.8px;
+      margin-bottom: 14px;
+      line-height: 1.25;
+    }
+    section > .container > p {
+      color: var(--text-secondary);
+      font-size: 15px;
+      max-width: 540px;
+      margin-bottom: 36px;
+    }
+
+    /* ── Feature grid ──────────────────────────────────────────── */
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .feature-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 24px;
+      transition: border-color 0.2s, box-shadow 0.2s, transform 0.18s;
+    }
+    .feature-card:hover {
+      border-color: rgba(123,104,238,0.2);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+      transform: translateY(-3px);
+    }
+    .feature-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      margin-bottom: 16px;
+      background: var(--accent-subtle);
+      color: var(--accent-to);
+    }
+    .feature-icon.green {
+      background: rgba(61,219,160,0.1);
+      color: var(--success);
+    }
+    .feature-card h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: -0.2px;
+    }
+    .feature-card p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ── How it works ──────────────────────────────────────────── */
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      position: relative;
+      padding-left: 36px;
+    }
+    .steps::before {
+      content: '';
+      position: absolute;
+      left: 13px;
+      top: 6px;
+      bottom: 6px;
+      width: 2px;
+      background: linear-gradient(180deg, var(--accent-from), var(--accent-to), var(--success));
+      border-radius: 2px;
+      opacity: 0.3;
+    }
+    .step {
+      position: relative;
+      padding: 16px 0;
+    }
+    .step-num {
+      position: absolute;
+      left: -36px;
+      top: 18px;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--bg-elevated);
+      border: 2px solid rgba(123,104,238,0.3);
+      font-size: 12px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--accent-to);
+    }
+    .step h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      letter-spacing: -0.2px;
+    }
+    .step p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ── Architecture ──────────────────────────────────────────── */
+    .arch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+    .arch-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 16px 18px;
+      transition: border-color 0.18s;
+    }
+    .arch-item:hover { border-color: rgba(123,104,238,0.15); }
+    .arch-item h4 {
+      font-size: 13px;
+      font-weight: 600;
+      font-family: var(--font-mono);
+      color: var(--accent-to);
+      margin-bottom: 4px;
+      letter-spacing: -0.2px;
+    }
+    .arch-item p {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    /* ── Permissions table ─────────────────────────────────────── */
+    .perm-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .perm-table th, .perm-table td {
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .perm-table th {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      background: var(--bg-surface);
+    }
+    .perm-table td:first-child {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent-to);
+      white-space: nowrap;
+    }
+    .perm-table td:last-child { color: var(--text-secondary); }
+    .perm-table tr:hover td { background: var(--bg-surface); }
+
+    /* ── Footer ────────────────────────────────────────────────── */
+    .site-footer {
+      position: relative;
+      z-index: 1;
+      border-top: 1px solid var(--border-color);
+      padding: 32px 0;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+    .site-footer .container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+    .footer-links { display: flex; gap: 20px; }
+    .footer-links a {
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      transition: color 0.18s;
+    }
+    .footer-links a:hover { color: var(--text-secondary); }
+
+    /* ── Responsive ────────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .hero { padding: 60px 0 40px; }
+      .hero-actions { flex-direction: column; align-items: center; }
+      .nav-links { gap: 14px; }
+      .nav-links a { font-size: 12px; }
+      .steps { padding-left: 32px; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="bg-glow"></div>
+
+<!-- ── Header ──────────────────────────────────────────────────── -->
+<header class="site-header">
+  <div class="container">
+    <a href="#" class="site-logo">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none">
+        <rect width="24" height="24" rx="7" fill="url(#lg)"/>
+        <rect x="4.5" y="4.5" width="15" height="15" rx="3" fill="white" opacity="0.1"/>
+        <rect x="7" y="7" width="2" height="10" rx="1" fill="white" opacity="0.7"/>
+        <rect x="11" y="5" width="2" height="14" rx="1" fill="white" opacity="0.9"/>
+        <rect x="15" y="9" width="2" height="6" rx="1" fill="white" opacity="0.55"/>
+        <circle cx="18" cy="6" r="2.8" fill="#3ddba0"/>
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#7b68ee"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs>
+      </svg>
+      <span>Redashski</span>
+    </a>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="#architecture">Architecture</a>
+      <span class="nav-badge">v0.7.0</span>
+    </nav>
+  </div>
+</header>
+
+<!-- ── Hero ─────────────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container">
+    <svg class="hero-logo" width="72" height="72" viewBox="0 0 24 24" fill="none">
+      <rect width="24" height="24" rx="7" fill="url(#hlg)"/>
+      <rect x="4.5" y="4.5" width="15" height="15" rx="3" fill="white" opacity="0.1"/>
+      <rect x="7" y="7" width="2" height="10" rx="1" fill="white" opacity="0.7"/>
+      <rect x="11" y="5" width="2" height="14" rx="1" fill="white" opacity="0.9"/>
+      <rect x="15" y="9" width="2" height="6" rx="1" fill="white" opacity="0.55"/>
+      <circle cx="18" cy="6" r="2.8" fill="#3ddba0"/>
+      <circle cx="18" cy="6" r="2.8" fill="url(#hdg)" opacity="0.5"/>
+      <defs>
+        <linearGradient id="hlg" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#7b68ee"/><stop offset="1" stop-color="#a78bfa"/></linearGradient>
+        <radialGradient id="hdg" cx="50%" cy="50%" r="50%"><stop stop-color="#7dffcc"/><stop offset="1" stop-color="#3ddba0" stop-opacity="0"/></radialGradient>
+      </defs>
+    </svg>
+    <h1>Snapshot your <span class="gradient">Redash queries</span> locally</h1>
+    <p>A Chrome extension that captures Redash query outputs on demand. Keep a per-tab history of table data and chart visuals, compare results, and export to CSV&thinsp;&mdash;&thinsp;all without data leaving your browser.</p>
+    <div class="hero-actions">
+      <a href="#install" class="btn btn-primary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0l3-3m-3 3L5 7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        Install
+      </a>
+      <a href="https://github.com/zautner/redashski" class="btn btn-secondary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+    <div class="badges">
+      <img src="https://img.shields.io/badge/Chrome-Manifest_V3-4285F4?logo=googlechrome&logoColor=white" alt="Chrome MV3">
+      <img src="https://img.shields.io/badge/version-0.7.0-7b68ee" alt="Version">
+      <img src="https://img.shields.io/badge/storage-local_only-3ddba0" alt="Local Storage">
+      <img src="https://img.shields.io/badge/license-MIT-555" alt="MIT License">
+    </div>
+  </div>
+</section>
+
+<!-- ── Features ─────────────────────────────────────────────────── -->
+<section id="features">
+  <div class="container">
+    <span class="section-label">Features</span>
+    <h2>Everything stays local</h2>
+    <p>Capture, compare and export Redash query data without any of it leaving your browser.</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M6 2H3a1 1 0 00-1 1v3M10 2h3a1 1 0 011 1v3M6 14H3a1 1 0 01-1-1v-3M10 14h3a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="8" r="2.5" fill="currentColor"/></svg>
+        </div>
+        <h3>On-demand snapshots</h3>
+        <p>Snap the current Redash query state with one click. Captures table data, metadata, and chart visuals.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon green">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M2 13V5a2 2 0 012-2h8a2 2 0 012 2v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="4" y="7" width="2" height="6" rx="1" fill="currentColor" opacity="0.7"/><rect x="7" y="5" width="2" height="8" rx="1" fill="currentColor"/><rect x="10" y="9" width="2" height="4" rx="1" fill="currentColor" opacity="0.5"/></svg>
+        </div>
+        <h3>Charts &amp; tables</h3>
+        <p>SVG and canvas chart captures plus full table data with columns and rows, all stored locally.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M4 6h8M4 10h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/><line x1="10" y1="1.5" x2="10" y2="14.5" stroke="currentColor" stroke-width="1.5" opacity="0.4"/></svg>
+        </div>
+        <h3>Side panel workspace</h3>
+        <p>Browse history, switch between Table and Charts tabs, and compare snapshots in the Chrome side panel.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon green">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M5 8l2 2 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/></svg>
+        </div>
+        <h3>Per-tab FIFO queue</h3>
+        <p>Each tab maintains its own snapshot history. Queue size is configurable from 1 to 100 entries.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0l3-3m-3 3L5 7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 12h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </div>
+        <h3>CSV export</h3>
+        <p>Export any table snapshot as CSV or copy it directly to your clipboard.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon green">
+          <svg width="20" height="20" viewBox="0 0 16 16" fill="none"><path d="M8 2a6 6 0 100 12A6 6 0 008 2z" stroke="currentColor" stroke-width="1.5"/><path d="M6 8h4M8 6v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/></svg>
+        </div>
+        <h3>Zero data leakage</h3>
+        <p>Data never leaves the browser. No analytics, no telemetry, no cookies. An 8 MB quota guard auto-evicts old snapshots.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── How it works ─────────────────────────────────────────────── -->
+<section id="install">
+  <div class="container">
+    <span class="section-label">Get started</span>
+    <h2>Up and running in 4 steps</h2>
+    <p>Redashski is loaded as an unpacked Chrome extension. No store installation required.</p>
+    <div class="steps">
+      <div class="step">
+        <span class="step-num">1</span>
+        <h3>Clone the repo</h3>
+        <p>Download or <code>git clone</code> this repository to your machine.</p>
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        <h3>Load in Chrome</h3>
+        <p>Open <code>chrome://extensions/</code>, enable <strong>Developer mode</strong>, click <strong>Load unpacked</strong>, and select the repo folder.</p>
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        <h3>Configure URLs</h3>
+        <p>Open Settings in the popup and add your Redash URL prefixes (e.g. <code>https://redash.example.com/</code>). The browser will prompt for host permission.</p>
+      </div>
+      <div class="step">
+        <span class="step-num">4</span>
+        <h3>Start snapping</h3>
+        <p>Navigate to a Redash query page, click <strong>Snap</strong> in the popup or side panel, and your results are captured locally.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Architecture ────────────────────────────────────────────── -->
+<section id="architecture">
+  <div class="container">
+    <span class="section-label">Architecture</span>
+    <h2>How it's built</h2>
+    <p>Chrome Manifest V3 extension with no build step, no external dependencies.</p>
+    <div class="arch-grid">
+      <div class="arch-item">
+        <h4>content/</h4>
+        <p>Injected into Redash pages. Detects and captures table + chart data from the DOM.</p>
+      </div>
+      <div class="arch-item">
+        <h4>background/</h4>
+        <p>Service worker that routes messages, manages the per-tab storage queue, and syncs icon state.</p>
+      </div>
+      <div class="arch-item">
+        <h4>ui/popup/</h4>
+        <p>Compact popup for quick actions: snap, toggle side panel, open settings.</p>
+      </div>
+      <div class="arch-item">
+        <h4>ui/sidepanel/</h4>
+        <p>Main workspace. Browse snapshot history, switch Table/Charts tabs, export CSV.</p>
+      </div>
+      <div class="arch-item">
+        <h4>shared/</h4>
+        <p>Shared constants: storage keys, message types, Redash DOM selectors, queue limits.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Permissions ──────────────────────────────────────────────── -->
+<section id="permissions">
+  <div class="container">
+    <span class="section-label">Permissions</span>
+    <h2>Minimal &amp; transparent</h2>
+    <p>Only the permissions actually needed, with host access requested at runtime.</p>
+    <table class="perm-table">
+      <thead><tr><th>Permission</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr><td>storage</td><td>Local snapshot history and settings</td></tr>
+        <tr><td>tabs</td><td>Tab-scoped history, active-tab operations</td></tr>
+        <tr><td>sidePanel</td><td>Side panel UI</td></tr>
+        <tr><td>scripting</td><td>Dynamic content script registration</td></tr>
+        <tr><td>optional_host_permissions</td><td>Requested at runtime when you add a Redash URL; browser shows a prompt per domain</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────────────── -->
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-links">
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="https://github.com/zautner/redashski">GitHub</a>
+      <a href="https://github.com/zautner/redashski/issues">Issues</a>
+    </div>
+    <span>Redashski is MIT-licensed. Data never leaves your browser.</span>
+  </div>
+</footer>
+
+</body>
+</html>

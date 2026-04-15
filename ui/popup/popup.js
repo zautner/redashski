@@ -213,7 +213,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('openSidePanel').addEventListener('click', toggleSidePanel);
   await updateSidePanelButton();
   document.getElementById('openSettings').addEventListener('click', () => {
-    document.getElementById('permittedUrls').focus();
+    const quickstartView = document.getElementById('quickstartView');
+    const settingsView = document.getElementById('settingsView');
+    const settingsBtn = document.getElementById('openSettings');
+    const isSettingsVisible = !settingsView.classList.contains('hidden');
+
+    if (isSettingsVisible) {
+      settingsView.classList.add('hidden');
+      quickstartView.classList.remove('hidden');
+      settingsBtn.classList.remove('active');
+      settingsBtn.title = 'Settings';
+    } else {
+      quickstartView.classList.add('hidden');
+      settingsView.classList.remove('hidden');
+      settingsBtn.classList.add('active');
+      settingsBtn.title = 'Back';
+    }
   });
   await loadSettings();
   document.getElementById('saveSettings').addEventListener('click', saveSettings);
