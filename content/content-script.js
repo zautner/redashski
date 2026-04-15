@@ -782,12 +782,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 async function init() {
-  await checkPermissions();
-  setIconState(isActive);
-
-  if (!isActive) {
-    return;
-  }
+  isActive = true;
+  setIconState(true);
 
   setupNavigationObserver();
   setupMutationObserver();

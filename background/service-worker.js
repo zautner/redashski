@@ -5,7 +5,7 @@ import {
   MAX_QUEUE_SIZE,
   MESSAGES
 } from '../shared/storage-keys.js';
-import { isUrlPermitted, setPermittedUrls } from './url-validator.js';
+import { isUrlPermitted, setPermittedUrls, getPermittedUrls, urlPrefixToMatchPattern } from './url-validator.js';
 
 // Track which windows currently have the side panel open
 const openPanelWindowIds = new Set();
@@ -16,6 +16,89 @@ if (chrome.sidePanel.onPanelClosed) {
       openPanelWindowIds.delete(details.windowId);
     }
   });
+}
+
+const CONTENT_SCRIPT_ID = 'redashski-content';
+
+async function getGrantedMatchPatterns(urls) {
+  const patterns = urls
+    .map(urlPrefixToMatchPattern)
+    .filter(Boolean);
+
+  if (patterns.length === 0) {
+    return [];
+  }
+
+  const granted = [];
+  for (const pattern of patterns) {
+    try {
+      const has = await chrome.permissions.contains({ origins: [pattern] });
+      if (has) {
+        granted.push(pattern);
+      }
+    } catch {
+      // skip invalid patterns
+    }
+  }
+  return granted;
+}
+
+async function registerContentScripts(matchPatterns) {
+  // Unregister existing first
+  try {
+    await chrome.scripting.unregisterContentScripts({ ids: [CONTENT_SCRIPT_ID] });
+  } catch {
+    // may not exist yet
+  }
+
+  if (matchPatterns.length === 0) {
+    return;
+  }
+
+  try {
+    await chrome.scripting.registerContentScripts([{
+      id: CONTENT_SCRIPT_ID,
+      matches: matchPatterns,
+      js: ['content/content-script.js'],
+      runAt: 'document_idle'
+    }]);
+  } catch (error) {
+    console.warn('Failed to register content scripts:', error);
+  }
+}
+
+async function syncContentScriptRegistration() {
+  const urls = await getPermittedUrls();
+  const patterns = await getGrantedMatchPatterns(urls);
+  await registerContentScripts(patterns);
+  return patterns;
+}
+
+async function injectIntoMatchingTabs(matchPatterns) {
+  if (matchPatterns.length === 0) return;
+
+  const tabs = await chrome.tabs.query({});
+  for (const tab of tabs) {
+    if (typeof tab.id !== 'number' || !tab.url) continue;
+    const matches = matchPatterns.some(pattern => {
+      try {
+        const patternUrl = new URL(pattern.replace('/*', '/'));
+        return tab.url.startsWith(patternUrl.origin);
+      } catch {
+        return false;
+      }
+    });
+    if (matches) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content/content-script.js']
+        });
+      } catch {
+        // tab may not be injectable (chrome://, etc.)
+      }
+    }
+  }
 }
 
 function createIconImageData(size, isActive) {
@@ -169,6 +252,49 @@ async function trimAllQueuesToSize(queueSize) {
   }
 }
 
+const STORAGE_QUOTA_WARN_BYTES = 8 * 1024 * 1024; // 8 MB
+
+async function enforceStorageQuota() {
+  const bytesInUse = await chrome.storage.local.getBytesInUse(null);
+  if (bytesInUse < STORAGE_QUOTA_WARN_BYTES) {
+    return;
+  }
+
+  // Evict oldest entries across all tabs until under threshold
+  const historyByTab = await getHistoryByTabMap();
+  let changed = false;
+
+  while (true) {
+    let oldestKey = null;
+    let oldestTime = Infinity;
+
+    for (const [tabKey, entries] of Object.entries(historyByTab)) {
+      if (!Array.isArray(entries) || entries.length === 0) continue;
+      const last = entries[entries.length - 1];
+      if (last.timestamp < oldestTime) {
+        oldestTime = last.timestamp;
+        oldestKey = tabKey;
+      }
+    }
+
+    if (!oldestKey) break;
+
+    historyByTab[oldestKey].pop();
+    if (historyByTab[oldestKey].length === 0) {
+      delete historyByTab[oldestKey];
+    }
+    changed = true;
+
+    // Re-check size estimate (rough: JSON size ≈ storage bytes)
+    const estimatedSize = JSON.stringify(historyByTab).length * 2;
+    if (estimatedSize < STORAGE_QUOTA_WARN_BYTES) break;
+  }
+
+  if (changed) {
+    await saveHistoryByTabMap(historyByTab);
+  }
+}
+
 async function setIconState(tabId, isActive) {
   try {
     await chrome.action.setIcon({ tabId, imageData: getIconImageDataSet(isActive) });
@@ -231,6 +357,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           }
 
           const history = await addResult(targetTabId, message.payload);
+          await enforceStorageQuota();
           sendResponse({ success: true, history, tabId: targetTabId });
           break;
         }
@@ -276,6 +403,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
         case MESSAGES.SET_PERMITTED_URLS: {
           const validUrls = await setPermittedUrls(message.urls || []);
+          const patterns = await syncContentScriptRegistration();
+          await injectIntoMatchingTabs(patterns);
           const tabs = await chrome.tabs.query({});
           await Promise.all(
             tabs
@@ -372,6 +501,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           break;
         }
 
+        case MESSAGES.REQUEST_HOST_PERMISSIONS: {
+          // After permissions are granted by the UI, re-sync content script registration
+          const patterns = await syncContentScriptRegistration();
+          await injectIntoMatchingTabs(patterns);
+          sendResponse({ success: true, patterns });
+          break;
+        }
+
         default:
           sendResponse({ success: false, error: 'Unknown message type' });
       }
@@ -404,12 +541,19 @@ chrome.runtime.onInstalled.addListener(async () => {
     await chrome.storage.local.set({ [STORAGE_KEYS.HISTORY_BY_TAB]: {} });
   }
 
+  const patterns = await syncContentScriptRegistration();
+  await injectIntoMatchingTabs(patterns);
+
   const tabs = await chrome.tabs.query({});
   await Promise.all(
     tabs
       .filter(tab => typeof tab.id === 'number')
       .map(tab => syncTabState(tab.id, tab.url || ''))
   );
+});
+
+chrome.runtime.onStartup.addListener(async () => {
+  await syncContentScriptRegistration();
 });
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {

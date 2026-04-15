@@ -8,7 +8,8 @@ const MESSAGES = {
   SET_SETTINGS: 'SET_SETTINGS',
   OPEN_SIDE_PANEL: 'OPEN_SIDE_PANEL',
   TOGGLE_SIDE_PANEL: 'TOGGLE_SIDE_PANEL',
-  GET_SIDE_PANEL_STATE: 'GET_SIDE_PANEL_STATE'
+  GET_SIDE_PANEL_STATE: 'GET_SIDE_PANEL_STATE',
+  REQUEST_HOST_PERMISSIONS: 'REQUEST_HOST_PERMISSIONS'
 };
 
 const DEFAULT_QUEUE_SIZE = 10;
@@ -25,7 +26,14 @@ function normalizeQueueSize(value) {
   return Math.max(MIN_QUEUE_SIZE, Math.min(MAX_QUEUE_SIZE, parsed));
 }
 
-
+function urlPrefixToMatchPattern(prefix) {
+  try {
+    const url = new URL(prefix);
+    return `${url.origin}/*`;
+  } catch {
+    return null;
+  }
+}
 
 function showStatus(message, type = '') {
   const statusText = document.getElementById('statusText');
@@ -56,12 +64,33 @@ async function saveSettings() {
   const queueSize = normalizeQueueSize(document.getElementById('queueSize').value);
   document.getElementById('queueSize').value = queueSize;
 
+  // Request host permissions for the URLs (must be in user gesture context)
+  const patterns = urls
+    .map(urlPrefixToMatchPattern)
+    .filter(Boolean);
+
+  let permissionGranted = true;
+  if (patterns.length > 0) {
+    try {
+      permissionGranted = await chrome.permissions.request({ origins: patterns });
+    } catch {
+      permissionGranted = false;
+    }
+  }
+
   await Promise.all([
     chrome.runtime.sendMessage({ type: MESSAGES.SET_PERMITTED_URLS, urls }),
     chrome.runtime.sendMessage({ type: MESSAGES.SET_SETTINGS, settings: { queueSize } })
   ]);
 
-  showStatus('Settings saved', 'success');
+  // Tell background to re-register content scripts for granted hosts
+  await chrome.runtime.sendMessage({ type: MESSAGES.REQUEST_HOST_PERMISSIONS }).catch(() => {});
+
+  if (permissionGranted) {
+    showStatus('Settings saved', 'success');
+  } else {
+    showStatus('Saved — some hosts not permitted by browser', 'error');
+  }
 }
 
 

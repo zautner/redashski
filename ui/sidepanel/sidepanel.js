@@ -26,6 +26,15 @@ function normalizeQueueSize(value) {
   return Math.max(MIN_QUEUE_SIZE, Math.min(MAX_QUEUE_SIZE, parsed));
 }
 
+function urlPrefixToMatchPattern(prefix) {
+  try {
+    const url = new URL(prefix);
+    return `${url.origin}/*`;
+  } catch {
+    return null;
+  }
+}
+
 async function loadVersion() {
   try {
     const manifest = chrome.runtime.getManifest();
@@ -509,10 +518,27 @@ async function saveSettingsData() {
   const queueSize = normalizeQueueSize(document.getElementById('queueSize').value);
   document.getElementById('queueSize').value = queueSize;
 
+  // Request host permissions (must be in user gesture context)
+  const patterns = urls
+    .map(urlPrefixToMatchPattern)
+    .filter(Boolean);
+
+  let permissionGranted = true;
+  if (patterns.length > 0) {
+    try {
+      permissionGranted = await chrome.permissions.request({ origins: patterns });
+    } catch {
+      permissionGranted = false;
+    }
+  }
+
   await Promise.all([
     chrome.runtime.sendMessage({ type: MESSAGES.SET_PERMITTED_URLS, urls }),
     chrome.runtime.sendMessage({ type: MESSAGES.SET_SETTINGS, settings: { queueSize } })
   ]);
+
+  // Tell background to re-register content scripts for granted hosts
+  await chrome.runtime.sendMessage({ type: 'REQUEST_HOST_PERMISSIONS' }).catch(() => {});
 
   hideSettings();
   await loadData();

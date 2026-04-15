@@ -44,3 +44,13 @@ export async function setPermittedUrls(urls) {
   await chrome.storage.local.set({ [STORAGE_KEYS.PERMITTED_URLS]: validUrls });
   return validUrls;
 }
+
+export function urlPrefixToMatchPattern(prefix) {
+  try {
+    const url = new URL(prefix);
+    const origin = url.origin;
+    return `${origin}/*`;
+  } catch {
+    return null;
+  }
+}

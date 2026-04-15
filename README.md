@@ -1,4 +1,13 @@
+<div align="center">
+
 # Redashski
+
+[![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-4285F4?logo=googlechrome&logoColor=white)](#installation-unpacked)
+[![Version](https://img.shields.io/badge/version-0.5.0-6B72E6)](#)
+[![Storage](https://img.shields.io/badge/storage-local_only-06960e)](#notes)
+[![License](https://img.shields.io/badge/license-MIT-333333)](#)
+
+</div>
 
 Redashski is a Chrome extension that snapshots Redash query outputs locally.
 It keeps a per-tab queue of recent snapshots and lets you compare table data and chart visuals in the side panel.
@@ -44,10 +53,10 @@ Only matching URLs are active for snapping.
 ## Permissions
 
 - `storage` - local snapshot history and settings
-- `tabs` / `activeTab` - tab-scoped history, active-tab operations
+- `tabs` - tab-scoped history, active-tab operations
 - `sidePanel` - side panel UI
-- `scripting` - content integration
-- host permissions (`<all_urls>`) with runtime URL allow-list filtering
+- `scripting` - dynamic content script registration
+- `optional_host_permissions` (`<all_urls>`) - host access is requested at runtime only when the user adds a Redash URL in Settings; the browser shows a permission prompt for each domain
 
 ## Architecture (Brief)
 
@@ -61,4 +70,5 @@ Only matching URLs are active for snapping.
 
 - Data never leaves the browser unless you export/copy manually.
 - Chart capture quality depends on Redash visualization DOM and render timing.
-- Very large snapshots may approach Chrome local storage limits.
+- A storage quota guard (8 MB) automatically evicts the oldest snapshots when local storage grows large.
+- See [privacy.html](privacy.html) for the full privacy policy.
