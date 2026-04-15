@@ -300,6 +300,56 @@ body {
   background: var(--bg-base);
 }
 
+.result-content-tabs {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 3px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+}
+
+.result-tab-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-family);
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.result-tab-btn:hover {
+  color: var(--text-secondary);
+}
+
+.result-tab-btn.active {
+  color: var(--text-primary);
+  background: rgba(124, 106, 247, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(124, 106, 247, 0.25);
+}
+
+.result-tab-pane {
+  display: none;
+}
+
+.result-tab-pane.active {
+  display: block;
+}
+
+.result-empty-view {
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
 .result-item.expanded .result-item-content {
   display: block;
   animation: slideDown 0.18s ease;

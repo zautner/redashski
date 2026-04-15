@@ -16,6 +16,7 @@ let currentHistory = [];
 let activeTabId = null;
 let activeTabPermitted = true;
 const expandedItemIds = new Set();
+const itemViewModes = new Map();
 
 function normalizeQueueSize(value) {
   const parsed = Number.parseInt(value, 10);
@@ -138,6 +139,29 @@ function snapItem() {
   });
 }
 
+function getDefaultViewMode(item) {
+  const hasTable = Array.isArray(item.columns) && item.columns.length > 0;
+  const hasCharts = Array.isArray(item.charts) && item.charts.length > 0;
+
+  if (hasTable) {
+    return 'table';
+  }
+  if (hasCharts) {
+    return 'charts';
+  }
+  return 'table';
+}
+
+function applyResultTabMode(resultItem, mode) {
+  resultItem.querySelectorAll('.result-tab-btn').forEach((button) => {
+    button.classList.toggle('active', button.dataset.mode === mode);
+  });
+
+  resultItem.querySelectorAll('.result-tab-pane').forEach((pane) => {
+    pane.classList.toggle('active', pane.dataset.pane === mode);
+  });
+}
+
 function renderResults() {
   const container = document.getElementById('resultsList');
   const emptyState = document.getElementById('emptyState');
@@ -176,6 +200,16 @@ function renderResults() {
 
   container.innerHTML = currentHistory.map(item => {
     const charts = normalizeCharts(item.charts);
+    const hasTable = item.columns.length > 0;
+    const hasCharts = charts.length > 0;
+    const savedMode = itemViewModes.get(item.id);
+    const activeMode = (
+      savedMode === 'table' && hasTable
+    ) || (
+      savedMode === 'charts' && hasCharts
+    ) ? savedMode : getDefaultViewMode(item);
+    itemViewModes.set(item.id, activeMode);
+
     const headerCells = item.columns.map(col => `<th title="${escapeHtml(col)}">${escapeHtml(col)}</th>`).join('');
     const bodyRows = item.rows.map(row => {
       const cells = item.columns.map((col, index) => {
@@ -216,47 +250,68 @@ function renderResults() {
           </div>
         </div>
         <div class="result-item-content">
-          ${charts.length > 0 ? `
-          <div class="result-charts">
-            ${charts.map((chart) => `
-              <div class="result-chart-card">
-                <div class="result-chart-title">${escapeHtml(chart.title)}</div>
-                <img class="result-chart-img" src="${chart.dataUrl}" alt="${escapeHtml(chart.title)}" title="${escapeHtml(chart.title)}"/>
-              </div>
-            `).join('')}
-          </div>` : ''}
-          <div class="result-item-toolbar">
-            <button class="toolbar-btn export-csv-btn" title="Download as CSV file" ${item.columns.length === 0 ? 'disabled' : ''}>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M3 12h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              Export CSV
-            </button>
-            <button class="toolbar-btn copy-csv-btn" title="Copy CSV to clipboard" ${item.columns.length === 0 ? 'disabled' : ''}>
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
-                <path d="M11 5V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-              </svg>
-              Copy CSV
-            </button>
+          <div class="result-content-tabs">
+            ${hasTable ? `<button class="result-tab-btn ${activeMode === 'table' ? 'active' : ''}" data-mode="table">Table</button>` : ''}
+            ${hasCharts ? `<button class="result-tab-btn ${activeMode === 'charts' ? 'active' : ''}" data-mode="charts">Charts</button>` : ''}
           </div>
-          ${item.columns.length > 0 ? `
-          <div class="result-table-wrapper">
-            <table class="result-table">
-              <thead>
-                <tr>${headerCells}</tr>
-              </thead>
-              <tbody>
-                ${bodyRows}
-              </tbody>
-            </table>
+
+          <div class="result-tab-pane ${activeMode === 'table' ? 'active' : ''}" data-pane="table">
+            ${hasTable ? `
+            <div class="result-item-toolbar">
+              <button class="toolbar-btn export-csv-btn" title="Download as CSV file">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M8 2v8M5 7l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M3 12h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Export CSV
+              </button>
+              <button class="toolbar-btn copy-csv-btn" title="Copy CSV to clipboard">
+                <svg width="13" height="13" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="5" y="5" width="8" height="9" rx="1.5" stroke="currentColor" stroke-width="1.5"/>
+                  <path d="M11 5V4a1 1 0 00-1-1H4a1 1 0 00-1 1v8a1 1 0 001 1h1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                Copy CSV
+              </button>
+            </div>
+            <div class="result-table-wrapper">
+              <table class="result-table">
+                <thead>
+                  <tr>${headerCells}</tr>
+                </thead>
+                <tbody>
+                  ${bodyRows}
+                </tbody>
+              </table>
+            </div>
+            ` : '<div class="result-empty-view">No table data in this snapshot.</div>'}
           </div>
-          ` : ''}
+
+          <div class="result-tab-pane ${activeMode === 'charts' ? 'active' : ''}" data-pane="charts">
+            ${hasCharts ? `
+            <div class="result-charts">
+              ${charts.map((chart) => `
+                <div class="result-chart-card">
+                  <div class="result-chart-title">${escapeHtml(chart.title)}</div>
+                  <img class="result-chart-img" src="${chart.dataUrl}" alt="${escapeHtml(chart.title)}" title="${escapeHtml(chart.title)}"/>
+                </div>
+              `).join('')}
+            </div>
+            ` : '<div class="result-empty-view">No chart images in this snapshot.</div>'}
+          </div>
         </div>
       </div>
     `;
   }).join('');
+
+  container.querySelectorAll('.result-tab-btn').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const resultItem = button.closest('.result-item');
+      const mode = button.dataset.mode;
+      itemViewModes.set(resultItem.dataset.id, mode);
+      applyResultTabMode(resultItem, mode);
+    });
+  });
 
   container.querySelectorAll('.result-item-header').forEach(header => {
     header.addEventListener('click', (event) => {
@@ -326,6 +381,12 @@ function pruneExpandedState() {
   Array.from(expandedItemIds).forEach(id => {
     if (!currentIds.has(id)) {
       expandedItemIds.delete(id);
+    }
+  });
+
+  Array.from(itemViewModes.keys()).forEach((id) => {
+    if (!currentIds.has(id)) {
+      itemViewModes.delete(id);
     }
   });
 }

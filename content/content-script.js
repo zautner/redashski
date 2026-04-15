@@ -304,6 +304,14 @@ function getVisualizationTabs() {
   return tabs;
 }
 
+function getTabLabel(tab) {
+  return (
+    (tab.textContent || '').trim() ||
+    (tab.getAttribute('aria-label') || '').trim() ||
+    (tab.getAttribute('title') || '').trim()
+  );
+}
+
 function getActiveVisualizationTab(tabs) {
   return tabs.find(tab =>
     tab.getAttribute('aria-selected') === 'true' ||
@@ -478,7 +486,7 @@ async function extractVisualizations() {
   }
 
   for (const tab of tabs) {
-    const tabLabel = (tab.textContent || '').trim();
+    const tabLabel = getTabLabel(tab);
     if (!tabLabel) {
       continue;
     }
@@ -505,6 +513,49 @@ async function extractVisualizations() {
   return charts.length > 0 ? charts : captureVisibleVisualizationsFallback();
 }
 
+async function extractTableDataWithTabFallback() {
+  const currentTable = extractTableData();
+  if (currentTable && currentTable.columns.length > 0 && currentTable.rows.length > 0) {
+    return currentTable;
+  }
+
+  const tabs = getVisualizationTabs();
+  if (tabs.length === 0) {
+    return currentTable;
+  }
+
+  const originalTab = getActiveVisualizationTab(tabs);
+  const tableTabs = tabs.filter((tab) => {
+    const label = getTabLabel(tab).toLowerCase();
+    return /\b(table|result|results|query result)\b/i.test(label);
+  });
+
+  if (tableTabs.length === 0) {
+    return currentTable;
+  }
+
+  let foundTable = null;
+
+  for (const tab of tableTabs) {
+    if (tab !== originalTab) {
+      tab.click();
+    }
+    await wait(220);
+    const table = extractTableData();
+    if (table && table.columns.length > 0 && table.rows.length > 0) {
+      foundTable = table;
+      break;
+    }
+  }
+
+  if (originalTab && originalTab.isConnected) {
+    originalTab.click();
+    await wait(160);
+  }
+
+  return foundTable || currentTable;
+}
+
 async function captureResults(showFeedback = false) {
   if (!isActive) return;
 
@@ -516,7 +567,7 @@ async function captureResults(showFeedback = false) {
   const currentUrl = window.location.href.split('#')[0];
 
   const charts = await extractVisualizations();
-  const tableData = extractTableData();
+  const tableData = await extractTableDataWithTabFallback();
   const hasTableData = Boolean(
     tableData && tableData.columns.length > 0 && tableData.rows.length > 0
   );
