@@ -217,4 +217,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   await loadSettings();
   document.getElementById('saveSettings').addEventListener('click', saveSettings);
+
+  document.getElementById('privacyLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: chrome.runtime.getURL('privacy.html'), active: true });
+  });
 });

@@ -188,6 +188,47 @@ body {
 }
 
 
+/* ─── QUICKSTART ────────────────────────────────────────────────── */
+.popup-quickstart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.quickstart-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.quickstart-item strong {
+  color: var(--accent-to);
+  font-weight: 600;
+}
+
+.quickstart-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(124, 106, 247, 0.18);
+  color: var(--accent-to);
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+
 /* ─── SETTINGS VIEW ─────────────────────────────────────────────── */
 .settings-section {
   display: flex;
@@ -311,7 +352,26 @@ input[type="number"]::placeholder {
   min-height: 32px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   flex-shrink: 0;
+}
+
+.footer-links {
+  display: flex;
+  gap: 10px;
+}
+
+.footer-link {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: var(--font-mono);
+  transition: color 0.15s ease;
+  cursor: pointer;
+}
+
+.footer-link:hover {
+  color: var(--accent-to);
 }
 
 .status-text {

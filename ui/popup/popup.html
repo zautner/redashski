@@ -48,12 +48,27 @@
     </header>
 
     <main id="settingsView">
+      <section class="popup-quickstart">
+        <div class="quickstart-item">
+          <span class="quickstart-num">1</span>
+          <span>Add your Redash URLs below</span>
+        </div>
+        <div class="quickstart-item">
+          <span class="quickstart-num">2</span>
+          <span>Open a Redash query page</span>
+        </div>
+        <div class="quickstart-item">
+          <span class="quickstart-num">3</span>
+          <span>Click <strong>Snap</strong> or use the side panel</span>
+        </div>
+      </section>
+
       <section class="settings-section">
         <h2 data-i18n="settings">Settings</h2>
         <div class="form-group">
           <label for="permittedUrls" data-i18n="permittedUrls">Permitted Redash URLs</label>
           <p class="help-text" data-i18n="permittedUrlsHelp">One URL prefix per line (e.g., https://redash.example.com/)</p>
-          <textarea id="permittedUrls" rows="5" placeholder="https://redash.example.com/"></textarea>
+          <textarea id="permittedUrls" rows="4" placeholder="https://redash.example.com/"></textarea>
         </div>
         <div class="form-group">
           <label for="queueSize" data-i18n="queueSize">Queue Size Per Tab</label>
@@ -68,6 +83,9 @@
 
     <footer class="popup-footer">
       <span id="statusText" class="status-text"></span>
+      <div class="footer-links">
+        <a id="privacyLink" class="footer-link" href="#" title="Privacy Policy">Privacy</a>
+      </div>
     </footer>
   </div>
 
