@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.2
+
+### Added
+- Open Graph and Twitter Card meta tags on `index.html` and `privacy.html` for rich link previews on X (Twitter), Slack, Discord, etc.
+- Branded OG image (`assets/og-image.png`, 1200x630) with dark theme, logo, tagline, and badges
+- Uses `summary_large_image` card type for maximum visual impact when shared
+
 ## 0.7.1
 
 ### Fixed

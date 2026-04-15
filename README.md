@@ -3,7 +3,7 @@
 # Redashski
 
 [![Chrome MV3](https://img.shields.io/badge/Chrome-Manifest_V3-4285F4?logo=googlechrome&logoColor=white)](#installation-unpacked)
-[![Version](https://img.shields.io/badge/version-0.7.1-6B72E6)](#)
+[![Version](https://img.shields.io/badge/version-0.7.2-6B72E6)](#)
 [![Storage](https://img.shields.io/badge/storage-local_only-06960e)](#notes)
 [![License](https://img.shields.io/badge/license-MIT-333333)](#)
 
