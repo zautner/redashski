@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="popupTitle">Redashski</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <header class="popup-header">
+      <div class="header-left">
+        <svg class="logo-mark" width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="22" height="22" rx="6" fill="url(#logoGrad)"/>
+          <rect x="5" y="5" width="12" height="12" rx="2" fill="white" opacity="0.15"/>
+          <rect x="10" y="5" width="1.8" height="12" fill="white" opacity="0.9"/>
+          <circle cx="15.5" cy="6.5" r="2.5" fill="#34d399"/>
+          <defs>
+            <linearGradient id="logoGrad" x1="0" y1="0" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#7c6af7"/>
+              <stop offset="1" stop-color="#a78bfa"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <h1 data-i18n="popupTitle">Redashski</h1>
+        <span id="versionBadge" class="version-badge">v1.0.2</span>
+      </div>
+      <div class="header-actions">
+        <button id="snapNow" class="icon-button snap-btn" title="Snap current results">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 2H3a1 1 0 00-1 1v3M10 2h3a1 1 0 011 1v3M6 14H3a1 1 0 01-1-1v-3M10 14h3a1 1 0 001-1v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <circle cx="8" cy="8" r="2.5" fill="currentColor"/>
+          </svg>
+        </button>
+        <button id="openSidePanel" class="icon-button" title="Open Side Panel">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1.5" y="1.5" width="13" height="13" rx="2" stroke="currentColor" stroke-width="1.5"/>
+            <line x1="10.5" y1="1.5" x2="10.5" y2="14.5" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </button>
+        <button id="openSettings" class="icon-button" title="Settings">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="8" cy="8" r="2.2" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="settingsView">
+      <section class="settings-section">
+        <h2 data-i18n="settings">Settings</h2>
+        <div class="form-group">
+          <label for="permittedUrls" data-i18n="permittedUrls">Permitted Redash URLs</label>
+          <p class="help-text" data-i18n="permittedUrlsHelp">One URL prefix per line (e.g., https://redash.example.com/)</p>
+          <textarea id="permittedUrls" rows="5" placeholder="https://redash.example.com/"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="queueSize" data-i18n="queueSize">Queue Size Per Tab</label>
+          <p class="help-text" data-i18n="queueSizeHelp">How many results to keep per open tab (1-100)</p>
+          <input id="queueSize" type="number" min="1" max="100" step="1" value="10">
+        </div>
+        <div class="form-actions">
+          <button id="saveSettings" class="primary-button" data-i18n="save">Save</button>
+        </div>
+      </section>
+    </main>
+
+    <footer class="popup-footer">
+      <span id="statusText" class="status-text"></span>
+    </footer>
+  </div>
+
+  <script src="popup.js" type="module"></script>
+</body>
+</html>

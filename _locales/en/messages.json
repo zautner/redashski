@@ -1,0 +1,104 @@
+{
+  "extensionName": {
+    "message": "Redashski",
+    "description": "The name of the extension"
+  },
+  "extensionDescription": {
+    "message": "Local buffer for Redash search results with FIFO queue and side panel viewer",
+    "description": "The description of the extension"
+  },
+  "popupTitle": {
+    "message": "Redashski",
+    "description": "Title shown in popup"
+  },
+  "historyTitle": {
+    "message": "Recent Results",
+    "description": "Header for history list"
+  },
+  "emptyHistory": {
+    "message": "No results captured yet",
+    "description": "Message when history is empty"
+  },
+  "openSidePanel": {
+    "message": "Open Side Panel",
+    "description": "Button to open side panel"
+  },
+  "clearHistory": {
+    "message": "Clear All",
+    "description": "Button to clear history"
+  },
+  "settings": {
+    "message": "Settings",
+    "description": "Settings section title"
+  },
+  "permittedUrls": {
+    "message": "Permitted Redash URLs",
+    "description": "Label for URL list setting"
+  },
+  "permittedUrlsHelp": {
+    "message": "One URL prefix per line (e.g., https://redash.example.com/)",
+    "description": "Help text for URL list"
+  },
+  "queueSize": {
+    "message": "Queue Size Per Tab",
+    "description": "Label for queue size setting"
+  },
+  "queueSizeHelp": {
+    "message": "How many results to keep per open tab (1-100)",
+    "description": "Help text for queue size setting"
+  },
+  "save": {
+    "message": "Save",
+    "description": "Save button"
+  },
+  "cancel": {
+    "message": "Cancel",
+    "description": "Cancel button"
+  },
+  "rows": {
+    "message": "$COUNT$ rows",
+    "description": "Number of rows",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "42"
+      }
+    }
+  },
+  "columns": {
+    "message": "$COUNT$ columns",
+    "description": "Number of columns",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+  "ago": {
+    "message": "$TIME$ ago",
+    "description": "Time ago string",
+    "placeholders": {
+      "time": {
+        "content": "$1",
+        "example": "5 minutes"
+      }
+    }
+  },
+  "openInNewTab": {
+    "message": "Open in new tab",
+    "description": "Tooltip for opening result URL"
+  },
+  "delete": {
+    "message": "Delete",
+    "description": "Delete button"
+  },
+  "sidePanelTitle": {
+    "message": "Redashski - Result History",
+    "description": "Side panel title"
+  },
+  "sidePanelEmpty": {
+    "message": "No results captured. Navigate to Redash queries to capture results.",
+    "description": "Empty state message in side panel"
+  }
+}
